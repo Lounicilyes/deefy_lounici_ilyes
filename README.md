@@ -25,3 +25,7 @@ Autres améliorations apportées
 
     Note : La fonctionnalité de restriction d’accès aux playlists en fonction du rôle de l'utilisateur ou de son statut de propriétaire reste à développer.
 
+Aucune données n'est necessaire car il n'y a pas de compte administrateur propre.
+Si vous voulez quand meme un compte déjà créé, voici : 
+- Username : user9@mail.com
+- Password : user9
