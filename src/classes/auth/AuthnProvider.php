@@ -7,8 +7,8 @@ use iutnc\deefy\audio\list\User;
 use iutnc\deefy\exception\AuthnException;
 use iutnc\deefy\exception\UnauthorizedException;
 
-
 class AuthnProvider {
+
     /**
      * Inscription d'un nouvel utilisateur.
      *
@@ -17,12 +17,14 @@ class AuthnProvider {
      * @throws Exception Si l'email est déjà enregistré ou si le mot de passe est trop court.
      */
     public static function register(string $email, string $password): void {
-//        if (strlen($password) < 10) {
-//            throw new Exception("Le mot de passe doit contenir au moins 10 caractères.");
-//        }
+        // Vérification des contraintes de mot de passe (décommenter si nécessaire)
+        // if (strlen($password) < 10) {
+        //     throw new Exception("Le mot de passe doit contenir au moins 10 caractères.");
+        // }
 
+        // Accède au dépôt pour enregistrer le nouvel utilisateur
         $pdo = DeefyRepository::getInstance();
-        try{
+        try {
             $pdo->addUser($email, $password);
         } catch (Exception $e) {
             throw new Exception("Erreur : " . $e->getMessage());
@@ -34,17 +36,20 @@ class AuthnProvider {
      *
      * @param string $email L'email de l'utilisateur.
      * @param string $password Le mot de passe en clair de l'utilisateur.
-     * @throws Exception Si les informations d'identification sont incorrectes.
+     * @throws AuthnException Si les informations d'identification sont incorrectes.
      */
     public static function signin(string $email, string $password): void {
         $repo = DeefyRepository::getInstance();
         try {
+            // Récupère les informations de l'utilisateur via l'email
             $user = $repo->getUser($email);
 
+            // Vérifie le mot de passe
             if (password_verify($password, $user->getPassword())) {
                 if (session_status() === PHP_SESSION_NONE) {
                     session_start();
                 }
+                // Stocke les informations de l'utilisateur dans la session (sans mot de passe)
                 $_SESSION['user'] = [
                     'id' => $user->getId(),
                     'email' => $user->getEmail(),
@@ -68,19 +73,22 @@ class AuthnProvider {
             session_start();
         }
         if (isset($_SESSION['user'])) {
-            // Créer un nouvel objet User à partir des données de session
+            // Crée un objet User basé sur les informations de session
             return new User(
                 $_SESSION['user']['id'],
                 $_SESSION['user']['email'],
                 $_SESSION['user']['role'],
-                '' // Le mot de passe n'est pas stocké dans la session pour des raisons de sécurité
+                '' // Le mot de passe est laissé vide pour des raisons de sécurité
             );
         }
         return null;
     }
 
-
-
+    /**
+     * Vérifie si un utilisateur est connecté.
+     *
+     * @return bool True si l'utilisateur est connecté, sinon False.
+     */
     public static function isUserLoggedIn(): bool {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();

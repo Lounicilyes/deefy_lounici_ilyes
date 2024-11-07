@@ -1,5 +1,4 @@
 <?php
-
 namespace iutnc\deefy\repository;
 
 use PDO;
@@ -15,6 +14,11 @@ class DeefyRepository
     private PDO $pdo;
     private static ?DeefyRepository $instance = null;
 
+    /**
+     * Retourne l'instance unique de `DeefyRepository` (Singleton).
+     *
+     * @return self L'instance de `DeefyRepository`.
+     */
     public static function getInstance(): self {
         if (is_null(self::$instance)) {
             self::$instance = new self();
@@ -22,6 +26,13 @@ class DeefyRepository
         return self::$instance;
     }
 
+    /**
+     * Constructeur privé pour le pattern Singleton.
+     *
+     * Initialise la connexion à la base de données en utilisant un fichier de configuration.
+     *
+     * @throws DatabaseException Si le fichier de configuration est manquant ou si la connexion échoue.
+     */
     private function __construct() {
         $config = parse_ini_file('/var/www/html/deefy_lounici_ilyes/config/db.config.ini');
 
@@ -39,10 +50,13 @@ class DeefyRepository
         }
     }
 
-    public function getConnection(): PDO {
-        return $this->pdo;
-    }
-
+    /**
+     * Récupère un utilisateur par son email.
+     *
+     * @param string $email L'email de l'utilisateur.
+     * @return User|null L'objet User correspondant.
+     * @throws NotFoundException Si aucun utilisateur n'est trouvé avec cet email.
+     */
     public function getUser(string $email): ?User {
         $stmt = $this->pdo->prepare("SELECT * FROM User WHERE email = :email");
         $stmt->execute(['email' => $email]);
@@ -55,30 +69,25 @@ class DeefyRepository
         return new User($row['id'], $row['email'], $row['role'], $row['passwd']);
     }
 
+    /**
+     * Vérifie si un email est déjà utilisé dans la base de données.
+     *
+     * @param string $email L'email à vérifier.
+     * @return bool True si l'email est pris, False sinon.
+     */
     public function isEmailTaken(string $email): bool {
         $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM User WHERE email = :email");
         $stmt->execute(['email' => $email]);
         return $stmt->fetchColumn() > 0;
     }
 
-    public function getPlaylistById(int $playlistId): ?Playlist {
-        $stmt = $this->pdo->prepare("SELECT * FROM playlist WHERE id = :id");
-        $stmt->execute(['id' => $playlistId]);
-        $row = $stmt->fetch();
-
-        if ($row === false) {
-            return null;
-        }
-
-        $playlist = new Playlist((int)$row['id'], $row['nom']);
-        $tracks = $this->getTracksByPlaylist($playlistId);
-        foreach ($tracks as $track) {
-            $playlist->addTrack($track);
-        }
-
-        return $playlist;
-    }
-
+    /**
+     * Récupère toutes les playlists appartenant à un utilisateur.
+     *
+     * @param int $userId L'ID de l'utilisateur.
+     * @return array Un tableau d'objets Playlist appartenant à l'utilisateur.
+     * @throws DatabaseException En cas d'erreur lors de la récupération des playlists.
+     */
     public function findPlaylistsByUser(int $userId): array {
         try {
             $stmt = $this->pdo->prepare("
@@ -101,7 +110,13 @@ class DeefyRepository
         }
     }
 
-
+    /**
+     * Ajoute un nouvel utilisateur dans la base de données.
+     *
+     * @param string $email L'email de l'utilisateur.
+     * @param string $password Le mot de passe en clair.
+     * @throws Exception Si l'email est déjà pris.
+     */
     public function addUser(string $email, string $password): void {
         if ($this->isEmailTaken($email)) {
             throw new Exception("Cet email est déjà enregistré.");
@@ -112,13 +127,23 @@ class DeefyRepository
         $stmt->execute([$email, $hash]);
     }
 
+    /**
+     * Enregistre une nouvelle playlist dans la base de données.
+     *
+     * @param Playlist $playlist L'objet Playlist à enregistrer.
+     */
     public function savePlaylist(Playlist $playlist): void {
         $stmt = $this->pdo->prepare("INSERT INTO playlist (nom) VALUES (:nom)");
         $stmt->execute(['nom' => $playlist->getName()]);
     }
 
+    /**
+     * Associe une playlist à un utilisateur.
+     *
+     * @param int $userId L'ID de l'utilisateur.
+     * @param Playlist $playlist La playlist à associer.
+     */
     public function associatePlaylistWithUser(int $userId, Playlist $playlist): void {
-        // On récupère l'ID de la playlist après son insertion
         $playlistId = $this->pdo->lastInsertId();
 
         $stmt = $this->pdo->prepare("INSERT INTO user2playlist (id_user, id_pl) VALUES (:id_user, :id_pl)");
@@ -128,8 +153,14 @@ class DeefyRepository
         ]);
     }
 
+    /**
+     * Ajoute une piste audio à une playlist.
+     *
+     * @param Track $track L'objet Track à ajouter.
+     * @param int $playlistId L'ID de la playlist.
+     * @throws DatabaseException En cas d'erreur lors de l'ajout de la piste.
+     */
     public function addTrackToPlaylist(Track $track, int $playlistId): void {
-        // Insertion de la piste dans la table `track`
         $stmt = $this->pdo->prepare("INSERT INTO track (titre, genre, duree, filename) VALUES (:titre, :genre, :duree, :filename)");
         $stmt->execute([
             'titre' => $track->getTitle(),
@@ -138,15 +169,12 @@ class DeefyRepository
             'filename' => $track->getFile()
         ]);
 
-        // Récupérer l'ID de la piste insérée
         $trackId = $this->pdo->lastInsertId();
 
-        // Compter le nombre de pistes existantes dans la playlist pour définir le numéro de piste
         $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM playlist2track WHERE id_pl = :playlist_id");
         $stmt->execute(['playlist_id' => $playlistId]);
         $no_piste_dans_liste = $stmt->fetchColumn() + 1;
 
-        // Associer la piste à la playlist avec `no_piste_dans_liste`
         $stmt = $this->pdo->prepare("INSERT INTO playlist2track (id_pl, id_track, no_piste_dans_liste) VALUES (:id_pl, :id_track, :no_piste_dans_liste)");
         $stmt->execute([
             'id_pl' => $playlistId,
@@ -155,13 +183,19 @@ class DeefyRepository
         ]);
     }
 
+    /**
+     * Récupère toutes les pistes associées à une playlist.
+     *
+     * @param int $playlistId L'ID de la playlist.
+     * @return array Un tableau d'objets Track.
+     */
     public function getTracksByPlaylist(int $playlistId): array {
         $stmt = $this->pdo->prepare("
-        SELECT t.id, t.titre, t.genre, t.duree, t.filename
-        FROM track t
-        JOIN playlist2track p2t ON t.id = p2t.id_track
-        WHERE p2t.id_pl = :playlistId
-    ");
+            SELECT t.id, t.titre, t.genre, t.duree, t.filename
+            FROM track t
+            JOIN playlist2track p2t ON t.id = p2t.id_track
+            WHERE p2t.id_pl = :playlistId
+        ");
         $stmt->execute(['playlistId' => $playlistId]);
 
         $tracks = [];
